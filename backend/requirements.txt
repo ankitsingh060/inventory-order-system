@@ -1,0 +1,14 @@
+# ─── Core Framework ───────────────────────────────────────────────────────────
+fastapi==0.104.1          # High-performance async web framework
+uvicorn[standard]==0.24.0  # ASGI server for FastAPI
+
+# ─── Database ─────────────────────────────────────────────────────────────────
+sqlalchemy==2.0.23        # ORM and database toolkit
+psycopg2-binary==2.9.9    # PostgreSQL driver (binary for Docker compatibility)
+
+# ─── Validation & Settings ────────────────────────────────────────────────────
+pydantic==2.5.2           # Data validation using Python type hints
+pydantic-settings==2.1.0  # Settings management via environment variables
+
+# ─── Utilities ────────────────────────────────────────────────────────────────
+python-dotenv==1.0.0      # Load environment variables from .env file

@@ -1,0 +1,94 @@
+# ─── docker-compose.yml ───────────────────────────────────────────────────────
+# Orchestrates three services:
+#   db       — PostgreSQL 16 database
+#   backend  — FastAPI Python API
+#   frontend — React SPA served by Nginx
+#
+# Usage:
+#   docker-compose up --build          # first run (builds images)
+#   docker-compose up -d               # start in background
+#   docker-compose down                # stop and remove containers
+#   docker-compose down -v             # also delete the data volume
+# ─────────────────────────────────────────────────────────────────────────────
+
+version: "3.9"
+
+services:
+
+  # ── PostgreSQL Database ────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine          # Slim Alpine-based image
+    container_name: invenorder_db
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB:       ${POSTGRES_DB:-inventorydb}
+
+    ports:
+      - "5432:5432"                    # Expose for local DB tools (e.g. pgAdmin)
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # Named volume for persistence
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-inventorydb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+
+  # ── FastAPI Backend ────────────────────────────────────────────────────────
+  backend:
+    build:
+      context:    ./backend
+      dockerfile: Dockerfile
+    container_name: invenorder_backend
+    restart: unless-stopped
+
+    environment:
+      # Connection string uses the service name 'db' as hostname (Docker DNS)
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-inventorydb}
+
+    ports:
+      - "8000:8000"                    # FastAPI available at http://localhost:8000
+
+    depends_on:
+      db:
+        condition: service_healthy     # Wait for Postgres to be ready
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+
+  # ── React Frontend ─────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context:    ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Bake the API URL into the React build so axios knows where to call
+        REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:8000}
+    container_name: invenorder_frontend
+    restart: unless-stopped
+
+    ports:
+      - "3000:80"                      # App available at http://localhost:3000
+
+    depends_on:
+      backend:
+        condition: service_healthy     # Don't start Nginx before API is up
+
+
+# ── Named Volumes ──────────────────────────────────────────────────────────
+# Data persists across container restarts and `docker-compose down`.
+# Deleted only by `docker-compose down -v`.
+volumes:
+  postgres_data:
+    driver: local
